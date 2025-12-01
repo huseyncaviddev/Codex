@@ -1,13 +1,27 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { PatientsModule } from './patients/patients.module';
-import { AppointmentsModule } from './appointments/appointments.module';
+import { ConfigModule } from '@nestjs/config';
+import { PrismaModule } from './common/prisma/prisma.module';
+import { AuthModule } from './auth/auth.module';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { ProjectsModule } from './projects/projects.module';
+import { DocumentsModule } from './documents/documents.module';
+import { TransmittalsModule } from './transmittals/transmittals.module';
+import { WorkflowsModule } from './workflows/workflows.module';
+import { AuditModule } from './audit/audit.module';
+import { FilesModule } from './files/files.module';
 
 @Module({
   imports: [
-    MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb://localhost:27017/dentist-clinic'),
-    PatientsModule,
-    AppointmentsModule,
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    AuthModule,
+    OrganizationsModule,
+    ProjectsModule,
+    DocumentsModule,
+    TransmittalsModule,
+    WorkflowsModule,
+    AuditModule,
+    FilesModule,
   ],
 })
 export class AppModule {}
