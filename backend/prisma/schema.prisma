@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ORG_ADMIN
+  DCC
+  REVIEWER
+  APPROVER
+  VIEWER
+}
+
+enum WorkflowStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+enum DocumentStatus {
+  DRAFT
+  ISSUED_FOR_REVIEW
+  ISSUED_FOR_APPROVAL
+  APPROVED
+  REJECTED
+  SUPERSEDED
+  VOID
+}
+
+enum TransmittalStatus {
+  DRAFT
+  SENT
+  CLOSED
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  users     User[]
+  projects  ProjectOrganization[]
+  documents Document[]
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  roles           Role[]
+  projects        ProjectParticipant[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Project {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  organizations  ProjectOrganization[]
+  participants   ProjectParticipant[]
+  documents      Document[]
+  transmittals   Transmittal[]
+  workflows      Workflow[]
+  auditLogs      AuditLog[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ProjectOrganization {
+  projectId       String
+  organizationId  String
+  project         Project      @relation(fields: [projectId], references: [id])
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@id([projectId, organizationId])
+}
+
+model ProjectParticipant {
+  projectId  String
+  userId     String
+  roles      Role[]
+  project    Project @relation(fields: [projectId], references: [id])
+  user       User    @relation(fields: [userId], references: [id])
+
+  @@id([projectId, userId])
+}
+
+model Document {
+  id                   String   @id @default(uuid())
+  projectId            String
+  documentNumber       String
+  title                String
+  discipline           String
+  type                 String
+  status               DocumentStatus
+  owningOrganizationId String
+  createdByUserId      String
+  project              Project @relation(fields: [projectId], references: [id])
+  owningOrganization   Organization @relation(fields: [owningOrganizationId], references: [id])
+  createdBy            User @relation(fields: [createdByUserId], references: [id])
+  revisions            DocumentRevision[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([projectId, owningOrganizationId, documentNumber])
+}
+
+model FileObject {
+  id               String   @id @default(uuid())
+  storageKey       String
+  fileName         String
+  fileSize         Int
+  mimeType         String
+  checksum         String
+  uploadedByUserId String
+  uploadedBy       User     @relation(fields: [uploadedByUserId], references: [id])
+  uploadedAt       DateTime @default(now())
+  revisions        DocumentRevision[]
+  attachments      TransmittalAttachment[]
+}
+
+model DocumentRevision {
+  id                   String   @id @default(uuid())
+  documentId           String
+  revisionCode         String
+  fileId               String
+  issueDate            DateTime
+  issuerOrganizationId String
+  issuedByUserId       String
+  supersededFlag       Boolean @default(false)
+  isCurrent            Boolean @default(false)
+  comments             String?
+  document             Document @relation(fields: [documentId], references: [id])
+  file                 FileObject @relation(fields: [fileId], references: [id])
+  issuerOrganization   Organization @relation(fields: [issuerOrganizationId], references: [id])
+  issuedBy             User @relation(fields: [issuedByUserId], references: [id])
+  transmittals         TransmittalRevision[]
+  workflows            Workflow[]
+  createdAt            DateTime @default(now())
+}
+
+model Transmittal {
+  id                 String   @id @default(uuid())
+  projectId          String
+  fromOrganizationId String
+  fromUserId         String
+  subject            String
+  body               String
+  purpose            String
+  dueDate            DateTime?
+  sentAt             DateTime?
+  status             TransmittalStatus @default(DRAFT)
+  project            Project @relation(fields: [projectId], references: [id])
+  fromOrganization   Organization @relation(fields: [fromOrganizationId], references: [id])
+  fromUser           User @relation(fields: [fromUserId], references: [id])
+  toOrganizations    TransmittalOrganization[]
+  ccOrganizations    TransmittalCc[]
+  linkedRevisions    TransmittalRevision[]
+  attachments        TransmittalAttachment[]
+  messages           TransmittalMessage[]
+  createdAt          DateTime @default(now())
+}
+
+model TransmittalOrganization {
+  id               String @id @default(uuid())
+  transmittalId    String
+  organizationId   String
+  transmittal      Transmittal  @relation(fields: [transmittalId], references: [id])
+  organization     Organization @relation(fields: [organizationId], references: [id])
+}
+
+model TransmittalCc {
+  id               String @id @default(uuid())
+  transmittalId    String
+  organizationId   String
+  transmittal      Transmittal  @relation(fields: [transmittalId], references: [id])
+  organization     Organization @relation(fields: [organizationId], references: [id])
+}
+
+model TransmittalRevision {
+  transmittalId          String
+  documentRevisionId     String
+  transmittal            Transmittal      @relation(fields: [transmittalId], references: [id])
+  documentRevision       DocumentRevision @relation(fields: [documentRevisionId], references: [id])
+
+  @@id([transmittalId, documentRevisionId])
+}
+
+model TransmittalAttachment {
+  id             String @id @default(uuid())
+  transmittalId  String
+  fileId         String
+  transmittal    Transmittal @relation(fields: [transmittalId], references: [id])
+  file           FileObject  @relation(fields: [fileId], references: [id])
+}
+
+model TransmittalMessage {
+  id             String   @id @default(uuid())
+  transmittalId  String
+  senderUserId   String
+  text           String
+  createdAt      DateTime @default(now())
+  transmittal    Transmittal @relation(fields: [transmittalId], references: [id])
+  sender         User        @relation(fields: [senderUserId], references: [id])
+}
+
+model Workflow {
+  id                       String   @id @default(uuid())
+  projectId                String
+  relatedDocumentRevisionId String
+  createdByUserId          String
+  currentStepIndex         Int      @default(0)
+  status                   WorkflowStatus @default(OPEN)
+  createdAt                DateTime @default(now())
+  completedAt              DateTime?
+  project                  Project @relation(fields: [projectId], references: [id])
+  revision                 DocumentRevision @relation(fields: [relatedDocumentRevisionId], references: [id])
+  createdBy                User @relation(fields: [createdByUserId], references: [id])
+  steps                    WorkflowStep[]
+}
+
+model WorkflowStep {
+  workflowId   String
+  stepIndex    Int
+  role         Role
+  organizationId String
+  dueDate      DateTime?
+  status       WorkflowStepStatus @default(PENDING)
+  decision     String?
+  decisionComment String?
+  decidedAt    DateTime?
+  decidedByUserId String?
+  workflow     Workflow @relation(fields: [workflowId], references: [id])
+  decidedBy    User?    @relation(fields: [decidedByUserId], references: [id])
+
+  @@id([workflowId, stepIndex])
+}
+
+model AuditLog {
+  id                  String   @id @default(uuid())
+  projectId           String?
+  actorUserId         String
+  actorOrganizationId String
+  actionType          String
+  entityType          String
+  entityId            String
+  metadata            Json
+  timestamp           DateTime @default(now())
+  project             Project? @relation(fields: [projectId], references: [id])
+  actorUser           User     @relation(fields: [actorUserId], references: [id])
+  actorOrganization   Organization @relation(fields: [actorOrganizationId], references: [id])
+}

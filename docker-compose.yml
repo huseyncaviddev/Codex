@@ -1,0 +1,34 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: edms
+      POSTGRES_PASSWORD: edms
+      POSTGRES_DB: edms
+    ports:
+      - '5432:5432'
+    volumes:
+      - db_data:/var/lib/postgresql/data
+  backend:
+    build: ./backend
+    command: sh -c "npm install && npm run prisma:generate && npm run start:dev"
+    environment:
+      DATABASE_URL: postgresql://edms:edms@db:5432/edms?schema=public
+      JWT_SECRET: dev-secret
+      USE_S3: ''
+    ports:
+      - '3001:3001'
+    depends_on:
+      - db
+  frontend:
+    build: ./frontend
+    command: sh -c "npm install && npm run dev -- -H 0.0.0.0 -p 3000"
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:3001/api
+    ports:
+      - '3000:3000'
+    depends_on:
+      - backend
+volumes:
+  db_data:
